@@ -52,25 +52,26 @@ class RCBNet(nn.Module):
     def forward(self, X: torch.Tensor):
         for n in range(self.no_loops):
             Xr = None
-            Yh = self.null_output
+            Yh = self.null_output.repeat(X.size(0), 1)
 
             for i in range(n):
                 with DummyContextManager() if self.start_grad >= n else torch.no_grad():
                     start_in = int(self.input_size / self.no_loops) * i
                     end_in = int(self.input_size / self.no_loops) * (i + 1)
-                    external_input = X[start_in, end_in]
+                    external_input = X[:, start_in:end_in]
                     if Xr is None:
                         Xr = external_input
                     else:
-                        Xr = torch.cat(Xr, external_input)
+                        Xr = torch.cat([Xr, external_input], 1)
 
                     Xi = torch.cat(Xr, Yh)
                     Xi = self.blocks[i](Xi)
 
-                    Xr = Xi[:end_in]
-                    Yh = Xi[end_in:-1]
-                    breaker = Xi[-1]
-                    if breaker:
+                    Xr = Xi[:, :end_in]
+                    Yh = Xi[:, end_in:-1]
+                    breaker = Xi[:, -1].mean()
+                    # Maybe in the future do this only for <certain> examples (?)
+                    if breaker > 0.9:
                         return Yh
             return Yh
 
@@ -115,8 +116,8 @@ class RCB(BaseMixer):
         optimizer = ad_optim.Ranger(self.net.parameters(), lr=0.01)
         scaler = GradScaler()
 
-        dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
-        train_dl = DataLoader(train_data, batch_size=self.batch_size, shuffle=False)
+        #dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
+        train_dl = DataLoader(train_data, batch_size=1, shuffle=False)
 
         for i in range(100):
             for X, Y in train_dl:
@@ -125,6 +126,7 @@ class RCB(BaseMixer):
                     Y = Y.to(self.device)
                     optimizer.zero_grad()
                     Yh = self.net(X)
+                    print(Yh, Y)
                     loss = criterion(Yh, Y)
                     if LightwoodAutocast.active:
                         scaler.scale(loss).backward()
