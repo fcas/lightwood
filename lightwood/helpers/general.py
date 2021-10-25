@@ -175,3 +175,14 @@ def mase(trues, preds, scale_error, fh):
         agg += mean_absolute_error(true, pred)
 
     return (agg / fh) / scale_error
+
+
+class DummyContextManager():
+    '''
+    Most reasonable idea from: https://stackoverflow.com/questions/27803059/conditional-with-statement-in-python
+    ''' # noqa
+    def __enter__(self):
+        return None
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False

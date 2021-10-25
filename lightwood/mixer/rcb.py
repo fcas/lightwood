@@ -1,4 +1,6 @@
 # Recycling circuit breaker mixer
+from torch.cuda.amp.grad_scaler import GradScaler
+from lightwood.helpers.device import get_devices
 from lightwood.mixer import BaseMixer
 from lightwood.encoder import BaseEncoder
 from lightwood.data.encoded_ds import EncodedDs
@@ -8,76 +10,69 @@ from torch import nn
 import torch
 import pandas as pd
 from lightwood.api.types import PredictionArguments
+from lightwood.mixer.helpers.transform_corss_entropy_loss import TransformCrossEntropyLoss
+import torch_optimizer as ad_optim
+from torch.utils.data import DataLoader
+from torch.nn.modules.loss import MSELoss
+from lightwood.api.dtype import dtype
+from lightwood.helpers.general import DummyContextManager
 
 
 class RCBNet(nn.Module):
     no_loops: int
     null_output: torch.Tensor
     device: torch.device
-    modules: nn.ModuleList
+    blocks: nn.ModuleList
     input_size: int
     start_grad: int
 
     def __init__(self, input_size: int, output_size: int, device: torch.device) -> None:
         super(RCBNet, self).__init__()
-        self.to(device)
         self.no_loops = 5
         self.null_output = torch.zeros(output_size)
         self.input_size = input_size
         self.start_grad = 0
-        modules = []
+        blocks = []
         for idx in reversed(list(range(1, self.no_loops + 1))):
-            layer_in_size = min(input_size, (input_size / self.no_loops) * idx)
-            layer_in_size += output_size
-
-            layers = [nn.Linear(layer_in_size, layer_in_size)]
+            layer_out_size = int(idx * input_size / self.no_loops + output_size + 1)
+            layers = [nn.Linear(layer_out_size - 1, layer_out_size)]
             if idx < self.no_loops:
                 layers.append(nn.SELU())
 
-            modules.append(torch.nn.Sequential(layers))
+            blocks.append(torch.nn.Sequential(*layers))
 
-        self.modules = nn.ModuleList(modules)
+        self.blocks = nn.ModuleList(blocks)
+        self.to(device)
 
     def to(self, device: torch.device) -> torch.nn.Module:
-        self.modules = self.modules.to(device)
+        self.blocks = self.blocks.to(device)
         self.device = device
         return self
 
-    def _grad_loop_bit(self, X):
-        start = min(self.input_size + 1, int(self.input_size / self.no_loops) * i)
-        end = min(self.input_size + 1, int(self.input_size / self.no_loops) * (1 + i))
+    def forward(self, X: torch.Tensor):
+        for n in range(self.no_loops):
+            Xr = None
+            Yh = self.null_output
 
-        if X is None:
-            X = input[start:end] + self.null_output
-            X = self.modules[i].forward(X)
-        else:
-            X = X[:start] + input[start:end] + X[start:]
-
-        # Circuit breaker condition
-        if False:
-            output = X[end:]
-            return output, X
-        else:
-            return None, X
-
-    def _forward_int(self, input: torch.Tensor):
-        for n in self.no_loops:
-            X = None
             for i in range(n):
-                if self.start_grad >= n:
-                    output, X = self._grad_loop_bit(self, X)
-                else:
-                    with torch.no_grad():
-                        output, X = self._grad_loop_bit(self, X)
+                with DummyContextManager() if self.start_grad >= n else torch.no_grad():
+                    start_in = int(self.input_size / self.no_loops) * i
+                    end_in = int(self.input_size / self.no_loops) * (i + 1)
+                    external_input = X[start_in, end_in]
+                    if Xr is None:
+                        Xr = external_input
+                    else:
+                        Xr = torch.cat(Xr, external_input)
 
-    def forward(self, input: torch.Tensor):
-        try:
-            with LightwoodAutocast():
-                output = self._forward_int(input)
-        except Exception:
-            output = self._forward_int(input)
+                    Xi = torch.cat(Xr, Yh)
+                    Xi = self.blocks[i](Xi)
 
-        return output
+                    Xr = Xi[:end_in]
+                    Yh = Xi[end_in:-1]
+                    breaker = Xi[-1]
+                    if breaker:
+                        return Yh
+            return Yh
 
 
 class RCB(BaseMixer):
@@ -94,8 +89,51 @@ class RCB(BaseMixer):
         self.target_encoder = target_encoder
         self.fit_on_dev = fit_on_dev
 
+    def _select_criterion(self) -> torch.nn.Module:
+        if self.dtype_dict[self.target] in (dtype.categorical, dtype.binary):
+            criterion = TransformCrossEntropyLoss(weight=self.target_encoder.index_weights.to(self.device))
+        elif self.dtype_dict[self.target] in (dtype.tags):
+            criterion = nn.BCEWithLogitsLoss()
+        elif (self.dtype_dict[self.target] in (dtype.integer, dtype.float, dtype.tsarray, dtype.quantity)
+                and self.timeseries_settings.is_timeseries):
+            criterion = nn.L1Loss()
+        elif self.dtype_dict[self.target] in (dtype.integer, dtype.float, dtype.quantity):
+            criterion = MSELoss()
+        else:
+            criterion = MSELoss()
+
+        return criterion
+
     def fit(self, train_data: EncodedDs, dev_data: EncodedDs) -> None:
-        pass
+        self.device, _ = get_devices()
+        self.net = RCBNet(len(train_data[0][0]), len(train_data[0][1]), self.device)
+
+        self.batch_size = min(200, int(len(train_data) / 10))
+        self.batch_size = max(40, self.batch_size)
+
+        criterion = self._select_criterion()
+        optimizer = ad_optim.Ranger(self.net.parameters(), lr=0.01)
+        scaler = GradScaler()
+
+        dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
+        train_dl = DataLoader(train_data, batch_size=self.batch_size, shuffle=False)
+
+        for i in range(100):
+            for X, Y in train_dl:
+                with LightwoodAutocast():
+                    X = X.to(self.device)
+                    Y = Y.to(self.device)
+                    optimizer.zero_grad()
+                    Yh = self.net(X)
+                    loss = criterion(Yh, Y)
+                    if LightwoodAutocast.active:
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        optimizer.step()
+                    print(loss.item())
 
     def partial_fit(self, train_data: EncodedDs, dev_data: EncodedDs) -> None:
         pass
