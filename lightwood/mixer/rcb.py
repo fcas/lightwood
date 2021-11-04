@@ -41,7 +41,7 @@ class RCBNet(nn.Module):
 
             blocks.append(torch.nn.Sequential(*layers))
 
-        self.blocks = nn.ModuleList(blocks)
+        self.blocks = nn.ModuleList(reversed(blocks))
         self.to(device)
 
     def to(self, device: torch.device) -> torch.nn.Module:
@@ -50,12 +50,12 @@ class RCBNet(nn.Module):
         return self
 
     def forward(self, X: torch.Tensor):
-        for n in range(self.no_loops):
+        for n in range(1, self.no_loops + 1):
             Xr = None
             Yh = self.null_output.repeat(X.size(0), 1)
 
             for i in range(n):
-                with DummyContextManager() if self.start_grad >= n else torch.no_grad():
+                with DummyContextManager() if self.start_grad <= n else torch.no_grad():
                     start_in = int(self.input_size / self.no_loops) * i
                     end_in = int(self.input_size / self.no_loops) * (i + 1)
                     external_input = X[:, start_in:end_in]
@@ -64,7 +64,7 @@ class RCBNet(nn.Module):
                     else:
                         Xr = torch.cat([Xr, external_input], 1)
 
-                    Xi = torch.cat(Xr, Yh)
+                    Xi = torch.cat([Xr, Yh], 1)
                     Xi = self.blocks[i](Xi)
 
                     Xr = Xi[:, :end_in]
@@ -117,7 +117,7 @@ class RCB(BaseMixer):
         scaler = GradScaler()
 
         #dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
-        train_dl = DataLoader(train_data, batch_size=1, shuffle=False)
+        train_dl = DataLoader(train_data, batch_size=self.batch_size, shuffle=False)
 
         for i in range(100):
             for X, Y in train_dl:
@@ -126,7 +126,6 @@ class RCB(BaseMixer):
                     Y = Y.to(self.device)
                     optimizer.zero_grad()
                     Yh = self.net(X)
-                    print(Yh, Y)
                     loss = criterion(Yh, Y)
                     if LightwoodAutocast.active:
                         scaler.scale(loss).backward()
