@@ -4,7 +4,7 @@ from lightwood.helpers.device import get_devices
 from lightwood.mixer import BaseMixer
 from lightwood.encoder import BaseEncoder
 from lightwood.data.encoded_ds import EncodedDs
-from typing import Dict
+from typing import Dict, List
 from lightwood.helpers.torch import LightwoodAutocast
 from torch import nn
 import torch
@@ -116,7 +116,7 @@ class RCB(BaseMixer):
         optimizer = ad_optim.Ranger(self.net.parameters(), lr=0.01)
         scaler = GradScaler()
 
-        #dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
+        # dev_dl = DataLoader(dev_data, batch_size=self.batch_size, shuffle=False)
         train_dl = DataLoader(train_data, batch_size=self.batch_size, shuffle=False)
 
         for i in range(100):
@@ -137,8 +137,30 @@ class RCB(BaseMixer):
                     print(loss.item())
 
     def partial_fit(self, train_data: EncodedDs, dev_data: EncodedDs) -> None:
+        # @TODO Implement once we get fit to get good results and actually introduce the encoder
         pass
 
     def __call__(self, ds: EncodedDs, args: PredictionArguments) -> pd.DataFrame:
-        pass
+        self.net = self.net.eval()
+        decoded_predictions: List[object] = []
 
+        with torch.no_grad():
+            for idx, (X, Y) in enumerate(ds):
+                X = X.to(self.net.device)
+                Yh = self.net(X)
+                Yh = torch.unsqueeze(Yh, 0) if len(Yh.shape) < 2 else Yh
+
+                kwargs = {}
+                for dep in self.target_encoder.dependencies:
+                    kwargs['dependency_data'] = {dep: ds.data_frame.iloc[idx][[dep]].values}
+
+                decoded_prediction = self.target_encoder.decode(Yh, **kwargs)
+
+                if not self.timeseries_settings.is_timeseries or self.timeseries_settings.nr_predictions == 1:
+                    decoded_predictions.extend(decoded_prediction)
+                else:
+                    decoded_predictions.append(decoded_prediction)
+
+            ydf = pd.DataFrame({'prediction': decoded_predictions})
+
+            return ydf
