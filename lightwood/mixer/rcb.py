@@ -144,11 +144,12 @@ class RCB(BaseMixer):
         self.net = self.net.eval()
         decoded_predictions: List[object] = []
 
+        dl = DataLoader(ds, batch_size=self.batch_size, shuffle=False)
         with torch.no_grad():
-            for idx, (X, Y) in enumerate(ds):
+            for idx, (X, Y) in enumerate(dl):
                 X = X.to(self.net.device)
                 Yh = self.net(X)
-                Yh = torch.unsqueeze(Yh, 0) if len(Yh.shape) < 2 else Yh
+                #Yh = torch.unsqueeze(Yh, 0) if len(Yh.shape) < 2 else Yh
 
                 kwargs = {}
                 for dep in self.target_encoder.dependencies:
@@ -156,10 +157,7 @@ class RCB(BaseMixer):
 
                 decoded_prediction = self.target_encoder.decode(Yh, **kwargs)
 
-                if not self.timeseries_settings.is_timeseries or self.timeseries_settings.nr_predictions == 1:
-                    decoded_predictions.extend(decoded_prediction)
-                else:
-                    decoded_predictions.append(decoded_prediction)
+                decoded_predictions.extend(decoded_prediction)
 
             ydf = pd.DataFrame({'prediction': decoded_predictions})
 
