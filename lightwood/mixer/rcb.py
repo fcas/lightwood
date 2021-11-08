@@ -149,7 +149,6 @@ class RCB(BaseMixer):
             for idx, (X, Y) in enumerate(dl):
                 X = X.to(self.net.device)
                 Yh = self.net(X)
-                #Yh = torch.unsqueeze(Yh, 0) if len(Yh.shape) < 2 else Yh
 
                 kwargs = {}
                 for dep in self.target_encoder.dependencies:
