@@ -200,7 +200,19 @@ def generate_json_ai(
     ):
         is_target_predicting_encoder = True
 
-    if is_target_predicting_encoder:
+    if True:
+        mixers = [
+            {
+                "module": "Residual",
+                "args": {
+                    "fit_on_dev": True,
+                    "stop_after": "$problem_definition.seconds_per_mixer",
+                    "search_hyperparameters": True,
+                },
+            }
+        ]
+        
+    elif is_target_predicting_encoder:
         mixers = [
             {
                 "module": "Unit",
@@ -507,7 +519,7 @@ def _add_implicit_values(json_ai: JsonAI) -> JsonAI:
     for i in range(len(mixers)):
         if mixers[i]["module"] == "Unit":
             pass
-        elif mixers[i]["module"] == "Neural":
+        elif mixers[i]["module"] == "Neural" or mixers[i]["module"] == "Residual":
             mixers[i]["args"]["target_encoder"] = mixers[i]["args"].get(
                 "target_encoder", "$encoders[self.target]"
             )

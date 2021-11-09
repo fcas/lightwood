@@ -5,10 +5,11 @@ from lightwood.mixer.lightgbm import LightGBM
 from lightwood.mixer.lightgbm_array import LightGBMArray
 from lightwood.mixer.sktime import SkTime
 from lightwood.mixer.regression import Regression
+from lightwood.mixer.residual import Residual
 
 try:
     from lightwood.mixer.qclassic import QClassic
 except Exception:
     QClassic = None
 
-__all__ = ['BaseMixer', 'Neural', 'LightGBM', 'LightGBMArray', 'Unit', 'Regression', 'SkTime', 'QClassic']
+__all__ = ['BaseMixer', 'Neural', 'LightGBM', 'LightGBMArray', 'Unit', 'Regression', 'SkTime', 'QClassic', 'Residual']
