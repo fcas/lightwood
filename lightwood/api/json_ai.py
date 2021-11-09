@@ -200,19 +200,7 @@ def generate_json_ai(
     ):
         is_target_predicting_encoder = True
 
-    if True:
-        mixers = [
-            {
-                "module": "Residual",
-                "args": {
-                    "fit_on_dev": True,
-                    "stop_after": "$problem_definition.seconds_per_mixer",
-                    "search_hyperparameters": True,
-                },
-            }
-        ]
-        
-    elif is_target_predicting_encoder:
+    if is_target_predicting_encoder:
         mixers = [
             {
                 "module": "Unit",
@@ -226,6 +214,14 @@ def generate_json_ai(
         mixers = [
             {
                 "module": "Neural",
+                "args": {
+                    "fit_on_dev": True,
+                    "stop_after": "$problem_definition.seconds_per_mixer",
+                    "search_hyperparameters": True,
+                },
+            },
+            {
+                "module": "Residual",
                 "args": {
                     "fit_on_dev": True,
                     "stop_after": "$problem_definition.seconds_per_mixer",
