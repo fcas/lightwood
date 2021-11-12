@@ -1,11 +1,11 @@
 import torch
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, OrdinalEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, RobustScaler   # MinMaxScaler,
 
 
 class MinMaxNormalizer:
     def __init__(self, combination=()):
-        self.scaler = MinMaxScaler()
+        self.scaler = RobustScaler()
         self.abs_mean = None
         self.combination = combination  # tuple with values in grouped-by columns
         self.output_size = 1
@@ -21,7 +21,7 @@ class MinMaxNormalizer:
 
         x = x.astype(float)
         x[x == None] = 0 # noqa
-        self.abs_mean = np.mean(np.abs(x))
+        self.abs_mean = np.median(np.abs(x))
         self.scaler.fit(x)
 
     def encode(self, y: np.ndarray) -> torch.Tensor:

@@ -73,9 +73,10 @@ class EncodedDs(Dataset):
                     data = self.data_frame[cols].iloc[idx].tolist()
 
                 encoded_tensor = self.encoders[col].encode(data, **kwargs)[0]
-                if torch.isnan(encoded_tensor).any() or torch.isinf(encoded_tensor).any():
-                    raise Exception(f'Encoded tensor: {encoded_tensor} contains nan or inf values')
                 if col != self.target:
+                    if torch.isnan(encoded_tensor).any() or torch.isinf(encoded_tensor).any():
+                        raise Exception(f'Encoded tensor: {encoded_tensor} contains nan or inf values')
+
                     X = torch.cat([X, encoded_tensor])
                 else:
                     Y = encoded_tensor

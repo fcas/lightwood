@@ -32,7 +32,10 @@ class ArNet(DefaultNet):
         self.encoder_span = encoder_span
         self.ar_column = f'__mdb_ts_previous_{self.target}'
         self.ar_idxs = list(*[range(idx[0], idx[1]) for col, idx in encoder_span.items() if col == self.ar_column])
-        dims = [(len(self.ar_idxs), output_size)]
+        dims = [(len(self.ar_idxs), len(self.ar_idxs)//2),
+                (len(self.ar_idxs)//2, len(self.ar_idxs)//4),
+                (len(self.ar_idxs)//4, output_size)
+                ]
         linears = [nn.Linear(in_features=inf, out_features=outf) for inf, outf in dims]
         self.ar_net = nn.Sequential(*linears)
         self.ar_net.to(self.device)

@@ -50,7 +50,7 @@ class Neural(BaseMixer):
         :param search_hyperparameters: If the network should run a more through hyperparameter search (currently disabled)
         :param n_epochs: amount of epochs that the network will be trained for. Supersedes all other early stopping criteria if specified.
         """ # noqa
-        super().__init__(stop_after)
+        super().__init__(1e100)
         self.dtype_dict = dtype_dict
         self.target = target
         self.timeseries_settings = timeseries_settings
@@ -92,9 +92,9 @@ class Neural(BaseMixer):
             criterion = TransformCrossEntropyLoss(weight=self.target_encoder.index_weights.to(self.model.device))
         elif self.dtype_dict[self.target] in (dtype.tags):
             criterion = nn.BCEWithLogitsLoss()
-        elif (self.dtype_dict[self.target] in (dtype.integer, dtype.float, dtype.tsarray, dtype.quantity)
-                and self.timeseries_settings.is_timeseries):
-            criterion = nn.L1Loss()
+        # elif (self.dtype_dict[self.target] in (dtype.integer, dtype.float, dtype.tsarray, dtype.quantity)
+        #         and self.timeseries_settings.is_timeseries):
+        #     criterion = nn.L1Loss()
         elif self.dtype_dict[self.target] in (dtype.integer, dtype.float, dtype.quantity):
             criterion = MSELoss()
         else:
@@ -211,6 +211,9 @@ class Neural(BaseMixer):
 
             # manually set epoch limit
             if self.n_epochs is not None:
+                if epoch == self.n_epochs - 1:
+                    print('almost finished')
+
                 if epoch > self.n_epochs:
                     break
 
