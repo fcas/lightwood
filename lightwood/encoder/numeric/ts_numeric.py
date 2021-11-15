@@ -42,7 +42,7 @@ class TsNumericEncoder(NumericEncoder):
                 if group is not None and self.normalizers is not None:
                     try:
                         vector = [self.normalizers[frozenset(group)].encode(np.array([real])).item()]
-                    except:
+                    except KeyError:
                         vector = [self.normalizers['__default'].encode(np.array([real])).item()]
                 else:
                     mean = self._abs_mean
@@ -97,7 +97,7 @@ class TsNumericEncoder(NumericEncoder):
                         if group is not None and self.normalizers is not None:
                             try:
                                 real_value = self.normalizers[frozenset(group)].decode(np.array([vector])).item()
-                            except:
+                            except KeyError:
                                 real_value = self.normalizers['__default'].decode(np.array([vector])).item()
                         else:
                             mean = self._abs_mean
