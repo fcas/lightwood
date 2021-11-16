@@ -21,6 +21,7 @@ from lightwood.data.encoded_ds import EncodedDs
 from lightwood.mixer.base import BaseMixer
 from lightwood.mixer.helpers.ar_net import ArNet
 from lightwood.mixer.helpers.default_net import DefaultNet
+from lightwood.mixer.helpers.ts_rnn_net import TsRnnNet
 from lightwood.api.types import TimeseriesSettings, PredictionArguments
 from lightwood.mixer.helpers.transform_corss_entropy_loss import TransformCrossEntropyLoss
 
@@ -58,7 +59,7 @@ class Neural(BaseMixer):
         self.epochs_to_best = 0
         self.n_epochs = n_epochs
         self.fit_on_dev = fit_on_dev
-        self.net_class = DefaultNet if net == 'DefaultNet' else ArNet
+        self.net_class = TsRnnNet  # DefaultNet if net == 'DefaultNet' else ArNet
         self.supports_proba = dtype_dict[target] in [dtype.binary, dtype.categorical]
         self.search_hyperparameters = search_hyperparameters
         self.stable = True
@@ -253,6 +254,11 @@ class Neural(BaseMixer):
         if self.net_class == ArNet:
             net_kwargs['encoder_span'] = ds.encoder_spans
             net_kwargs['target_name'] = self.target
+
+        elif self.net_class == TsRnnNet:
+            net_kwargs['encoder_span'] = ds.encoder_spans
+            net_kwargs['target_name'] = self.target
+            net_kwargs['output_size'] = self.timeseries_settings.nr_predictions
 
         self.model = self.net_class(**net_kwargs)
 
