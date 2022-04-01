@@ -93,12 +93,12 @@ class ICP(BaseAnalysisBlock):
                 if ns.predictor.supports_proba:
                     icp.nc_function.model.prediction_cache = ns.normal_predictions[all_cat_cols].values
                 else:
-                    if ns.is_multi_ts:
-                        icp.nc_function.model.prediction_cache = np.array(
-                            [p[0] for p in ns.normal_predictions['prediction']])
-                        preds = icp.nc_function.model.prediction_cache
-                    else:
-                        preds = ns.normal_predictions['prediction']
+                    # if ns.is_multi_ts:
+                    #     icp.nc_function.model.prediction_cache = np.array(
+                    #         [p[0] for p in ns.normal_predictions['prediction']])
+                    #     preds = icp.nc_function.model.prediction_cache
+                    # else:
+                    preds = ns.normal_predictions['prediction']
                     predicted_classes = pd.get_dummies(preds).values  # inflate to one-hot enc
                     icp.nc_function.model.prediction_cache = predicted_classes
 
@@ -174,7 +174,11 @@ class ICP(BaseAnalysisBlock):
                     # save relevant predictions in the caches, then calibrate the ICP
                     pred_cache = icp_df.pop(f'__predicted_{ns.target}').values
                     icps[frozenset(group)].nc_function.model.prediction_cache = pred_cache
-                    icp_df, y = clean_df(icp_df, ns.target, ns.is_classification, output.get('label_encoders', None))
+                    if not ns.is_multi_ts:
+                        icp_df, y = clean_df(icp_df, ns.target, ns.is_classification, output.get('label_encoders', None))
+                    else:
+                        multi_ts_cols = [ns.target] + [f'{ns.target}_timestep_{i}' for i in range(1, ns.tss.horizon or 0)]
+                        icp_df, y = ts_clean_df(icp_df, multi_ts_cols)
                     if icps[frozenset(group)].nc_function.normalizer is not None:
                         icps[frozenset(group)].nc_function.normalizer.prediction_cache = icp_df.pop(
                             f'__norm_{ns.target}').values
