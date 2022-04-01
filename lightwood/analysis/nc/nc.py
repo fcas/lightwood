@@ -215,6 +215,34 @@ class SignErrorErrFunc(RegressionErrFunc):
         return np.vstack([-nc[lower], nc[upper]])
 
 
+class ArrayAbsErrorErrFunc(RegressionErrFunc):
+    """Calculates absolute error nonconformity for multiple regression problems (e.g. time series). """ # noqa
+
+    def __init__(self):
+        super(ArrayAbsErrorErrFunc, self).__init__()
+
+    def apply(self, prediction, y):
+        """
+        :param prediction: list of lists
+        :param y: list of lists
+        """
+        err = []
+        for pred, suby in zip(prediction, y):
+            suberr = 0
+            for pi, yi in zip(pred, suby):
+                if pi == pi and yi == yi:  # nan filter
+                    suberr += np.abs(pi - yi)
+            err.append(suberr/len(pred))
+        return np.array(err)
+
+    def apply_inverse(self, nc, significance):
+        nc = np.sort(nc)[::-1]
+        border = int(np.floor(significance * (nc.size + 1))) - 1
+        # TODO: should probably warn against too few calibration examples
+        border = min(max(border, 0), nc.size - 1)
+        return np.vstack([nc[border], nc[border]])
+
+
 # -----------------------------------------------------------------------------
 # Base nonconformity scorer
 # -----------------------------------------------------------------------------
@@ -493,7 +521,12 @@ class RegressorNc(BaseModelNc):
                 err_dist = np.hstack([err_dist] * n_test)
                 err_dist *= norm
 
-                intervals[:, 0, i] = prediction - err_dist[0, :]
-                intervals[:, 1, i] = prediction + err_dist[0, :]
+                if not isinstance(prediction[0], list):
+                    intervals[:, 0, i] = prediction - err_dist[0, :]
+                    intervals[:, 1, i] = prediction + err_dist[0, :]
+                else:
+                    prediction = np.array([t[0] for t in list(prediction)])
+                    intervals[:, 0, i] = prediction - err_dist[0, :]
+                    intervals[:, 1, i] = prediction + err_dist[0, :]
 
             return intervals

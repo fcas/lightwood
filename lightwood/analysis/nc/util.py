@@ -32,6 +32,13 @@ def clean_df(df, target, is_classification, label_encoders):
     return df, y
 
 
+def ts_clean_df(df, target_cols: list):
+    y = df[target_cols].values
+    y = y.astype(float)
+
+    return df, y
+
+
 def set_conf_range(
         X: pd.DataFrame,
         icp,
