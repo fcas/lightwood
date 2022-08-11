@@ -120,13 +120,14 @@ def add_tn_num_conf_bounds(data: pd.DataFrame, tss_args):
         data[col] = data[col].astype(object)
 
     for idx, row in data.iterrows():
-        error_increase = [row['confidence']] + \
-                         [row['confidence'] * np.log(np.e + t / 2)  # offset by e so that y intercept is 1
+        conf = row['confidence'][0] if isinstance(row['confidence'], list) else row['confidence']
+        error_increase = [conf] + \
+                         [conf * np.log(np.e + t / 2)  # offset by e so that y intercept is 1
                           for t in range(1, tss_args.horizon)]
-        data['confidence'].iloc[idx] = [row['confidence'] for _ in range(tss_args.horizon)]
+        data['confidence'].iloc[idx] = [conf for _ in range(tss_args.horizon)]
 
         preds = row['prediction']
-        width = row['upper'] - row['lower']
+        width = row['upper'] - row['lower'] if not isinstance(row['upper'], list) else row['upper'][0] - row['lower'][0]
         data['lower'].iloc[idx] = [pred - (width / 2) * modifier for pred, modifier in zip(preds, error_increase)]
         data['upper'].iloc[idx] = [pred + (width / 2) * modifier for pred, modifier in zip(preds, error_increase)]
 
