@@ -223,12 +223,12 @@ class SkTime(BaseMixer):
         if args.predict_proba:
             log.warning('This mixer does not output probability estimates')
 
-        df = deepcopy(ds.data_frame).reset_index(drop=True)
+        df = deepcopy(ds.data_frame).reset_index()  # drop=True)
 
-        forecast_offset = args.forecast_offset
-        if '__mdb_forecast_offset' in df.columns:
-            if df['__mdb_forecast_offset'].nunique() == 1:
-                forecast_offset = int(df['__mdb_forecast_offset'].unique()[0])
+        # forecast_offset = args.forecast_offset
+        # if '__mdb_forecast_offset' in df.columns:
+        #     if df['__mdb_forecast_offset'].nunique() == 1:
+        #         forecast_offset = int(df['__mdb_forecast_offset'].unique()[0])
 
         length = sum(ds.encoded_ds_lenghts) if isinstance(ds, ConcatedEncodedDs) else len(ds)
         ydf = pd.DataFrame(0,  # zero-filled
@@ -246,6 +246,13 @@ class SkTime(BaseMixer):
             group = tuple(group)
             group = '__default' if group[0] == '__default' else group
             series_idxs, series_data = get_group_matches(df, group, self.grouped_by)
+
+            series_freq = self.ts_analysis['sample_freqs'][group]
+            series_cutoff = self.ts_analysis['cutoffs'][group]
+            before = series_cutoff if series_cutoff <= series_data['index'].iloc[0] else series_data['index'].iloc[0]
+            after = series_cutoff if before != series_cutoff else series_data['index'].iloc[0]
+            forecast_offset = after - before
+            # cast to inferred freq ^ NO, better to just DIVIDE by that
 
             if series_data.size > 0:
                 series = series_data[self.target]

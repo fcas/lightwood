@@ -85,6 +85,19 @@ def get_delta(
     return deltas, periods, freqs
 
 
+def get_cutoffs(df: pd.DataFrame, group_combinations: list, tss) -> Dict:
+    cutoffs = {}
+    if tss.group_by:
+        for group in group_combinations:
+            _, subset = get_group_matches(df, group, tss.group_by)
+            if subset.shape[0] > 1:
+                cutoffs[group] = subset[tss.order_by].index[-1]
+    else:
+        cutoffs['__default'] = df[tss.order_by].index[-1]
+
+    return cutoffs
+
+
 def get_inferred_timestamps(df: pd.DataFrame, col: str, deltas: dict, tss, stat_analysis,
                             time_format='') -> pd.DataFrame:
     horizon = tss.horizon
