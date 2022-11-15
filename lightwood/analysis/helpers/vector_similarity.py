@@ -80,9 +80,11 @@ class VectorSimilarity(BaseAnalysisBlock):
 
         df = deepcopy(ns.data)
 
-        df.to_csv('df_tester_th.csv')
+        df.to_csv('df.csv')
 
-        log.info("output df")
+        log.info("output df.csv")
+
+        # test commit from GH desktop
 
         #log.info(df)
 
