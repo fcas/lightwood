@@ -10,6 +10,8 @@ from lightwood.analysis.helpers.conf_stats import ConfStats
 from lightwood.analysis.nn_conf.temp_scale import TempScaler
 from lightwood.analysis.helpers.feature_importance import PermutationFeatureImportance
 
+from lightwood.analysis.helpers.vector_similarity import VectorSimilarity
+
 # Blocks with extra requirements
 try:
     from lightwood.analysis.helpers.shap import ShapleyValues
@@ -20,4 +22,5 @@ except Exception:
 
 
 __all__ = ['model_analyzer', 'explain', 'BaseAnalysisBlock', 'TempScaler', 'PyOD',
-           'ICP', 'AccStats', 'ConfStats', 'PermutationFeatureImportance', 'ShapleyValues']
+           'ICP', 'AccStats', 'ConfStats', 'PermutationFeatureImportance', 'ShapleyValues',
+           'VectorSimilarity']

@@ -84,7 +84,10 @@ def _consolidate_analysis_blocks(jsonai, key):
         },
         'TempScaler': {
             "deps": []
-        }
+        },
+        'VectorSimilariy': {
+            "deps": []
+        },
     }
 
     # 1. all dependencies are correct
