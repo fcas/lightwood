@@ -4,24 +4,34 @@ from typing import Dict, Optional, Tuple
 
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import OrdinalEncoder
 
-#from pyod.models.lof import LOF
-#from pyod.models.pca import PCA
-#from pyod.models.hbos import HBOS
-#from pyod.models.suod import SUOD
 
 from lightwood.analysis.base import BaseAnalysisBlock
 from lightwood.helpers.log import log
 from lightwood.helpers.parallelism import get_nr_procs
 
+import dill
+
+def dill_dump(my_object,fname):
+    with open(f'{fname}.pkl', 'wb') as file:
+        dill.dump(my_object, file)
+        
+    return f'Saved as {fname}'
+
+def dill_load(fname):
+    with open(f'{fname}.pkl', 'rb') as file:
+        my_object = dill.load(file)
+    
+    return my_object
+
+
+
 
 class VectorSimilarity(BaseAnalysisBlock):
     """
-    Wrapper analysis block for the 'PyOD' anomaly detection library.
+    
+    Xx
 
-    For now, the following techniques are supported:
-      - SUOD: Large-scale unsupervised heterogeneous outlier detection
     """  # noqa
 
     def __init__(self, deps: Optional[Tuple] = ...):
@@ -32,7 +42,10 @@ class VectorSimilarity(BaseAnalysisBlock):
         self.ordinal_encoders = dict()
         
         log.info("Vector Similarity: init")
-        
+
+
+
+
 
     def analyze(self, info: Dict[str, object], **kwargs) -> Dict[str, object]:
         log.info("Vector Similarity: analyse")
@@ -47,6 +60,7 @@ class VectorSimilarity(BaseAnalysisBlock):
         #           n_jobs=n_jobs,
         #           combination='average',
         #           verbose=False)
+        info['train_data'] = df
 
         if False:
             if ns.tss.is_timeseries:
@@ -74,41 +88,20 @@ class VectorSimilarity(BaseAnalysisBlock):
                 global_insights: Dict[str, object],
                 **kwargs
                 ) -> Tuple[pd.DataFrame, Dict[str, object]]:
-        log.info("Vector Similarity: explain")
+        
+        log.warning("VECTOR SIMILARITY")
+
         ns = SimpleNamespace(**kwargs)
-        log.info("Vector Similarity: DF")
 
         df = deepcopy(ns.data)
-
         df.to_csv('df.csv')
+        dill_dump(df,'df')
+        log.warning("OUTPUT df")
 
-        log.info("output df.csv")
+        df_train = deepcopy(ns.analysis['train_data'])
+        df_train.to_csv('df_train.csv')
+        dill_dump(df_train,'df_train')
+        log.warning("OUTPUT df_train")
 
-        # test commit from GH desktop
-
-        #log.info(df)
-
-
-        #if True:
-            #pyod_explainer = ns.analysis.get('pyod_explainer', None)
-            #if pyod_explainer is None:
-            #    return row_insights, global_insights
-
-            
-            
-            #print(df)
-            #if ns.tss.is_timeseries:
-                #df = self._preprocess_ts_df(df, ns)
-
-            #df = df[self.input_cols].fillna(0)
-            #row_insights['pyod_anomaly'] = pyod_explainer.predict(df).astype(bool)  # binary labels (0: inlier, 1: outlier)
             
         return row_insights, global_insights
-
-    def _preprocess_ts_df(self, df: pd.DataFrame, ns: SimpleNamespace) -> pd.DataFrame:
-        for gcol in ns.tss.group_by:
-            df[gcol] = self.ordinal_encoders[gcol].transform(df[gcol].values.reshape(-1, 1).astype(np.object)).flatten()
-
-        for w in range(ns.tss.window + 1):
-            df[f'__pyod_window_{ns.tss.window - w}'] = df[f'__mdb_ts_previous_{self.target}'].apply(lambda x: x[w])
-        return df
