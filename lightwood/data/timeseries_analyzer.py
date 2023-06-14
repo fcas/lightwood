@@ -40,7 +40,7 @@ def timeseries_analyzer(data: Dict[str, pd.DataFrame], dtype_dict: Dict[str, str
 
     normalizers = generate_target_group_normalizers(data['train'], target, dtype_dict, groups, tss)
 
-    if dtype_dict[target] in (dtype.integer, dtype.float, dtype.num_tsarray):
+    if False: # dtype_dict[target] in (dtype.integer, dtype.float, dtype.num_tsarray):
         naive_forecast_residuals, scale_factor = get_grouped_naive_residuals(data['dev'], target, tss, groups)
         differencers = get_differencers(data['train'], target, groups, tss.group_by)
         stl_transforms = get_stls(data['train'], data['dev'], target, periods, groups, tss)

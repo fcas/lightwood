@@ -29,7 +29,7 @@ def get_group_matches(
         raise Exception(f"Wrong data type {type(data)}, must be pandas.DataFrame or pd.Series")
 
     if combination == '__default':
-        return list(data.index), data
+        return data.index.tolist(), data
     else:
         subset = data
         for val, col in zip(combination, group_columns):
@@ -37,7 +37,7 @@ def get_group_matches(
         if len(subset) > 0:
             if copy:
                 subset = subset.copy()
-            return list(subset.index), subset
+            return subset.index.tolist(), subset
         else:
             return [], pd.DataFrame()
 
@@ -47,7 +47,8 @@ def get_delta(
         dtype_dict: dict,
         group_combinations: list,
         target: str,
-        tss
+        tss,
+        grouped: bool = False
 ) -> Tuple[Dict, Dict, Dict]:
     """
     Infer the sampling interval of each time series, by picking the most popular time interval observed in the training data.
@@ -56,34 +57,59 @@ def get_delta(
     :param group_combinations: all tuples with distinct values for `TimeseriesSettings.group_by` columns, defining all available time series.
     :param target: name of target column
     :param tss: timeseries settings
+    :param grouped: whether to perform the analysis per-group or not (single analysis, global)
 
     :return:
     Dictionary with group combination tuples as keys. Values are dictionaries with the inferred delta for each series.
     """  # noqa
+    # TODO: for scale, simply pick the largest series as representative. For now, can be single group largest dimension, but eventually we'd like the entire combination
     df = df.copy()
+    n = min(10_000, len(df))
     original_col = f'__mdb_original_{tss.order_by}'
     order_col = original_col if original_col in df.columns else tss.order_by
-    deltas = {"__default": df[order_col].astype(float).rolling(window=2).apply(np.diff).value_counts().index[0]}
-    freq, period = detect_freq_period(deltas["__default"], tss, len(df))
+    subsample = None
+    if tss.group_by:
+        for group in group_combinations:
+            if group != '__default':
+                _, subsample = get_group_matches(df, group, tss.group_by)
+                break
+    else:
+        subsample = df.iloc[:n, :]
+    deltas = {"__default": subsample[order_col].astype(float).rolling(window=2).apply(np.diff).value_counts().index[0]}
+    freq, period = detect_freq_period(deltas["__default"], tss, len(subsample))
     periods = {"__default": [period]}
     freqs = {"__default": freq}
 
-    if tss.group_by:
-        for group in group_combinations:
-            if group != "__default":
-                _, subset = get_group_matches(df, group, tss.group_by)
-                if subset.shape[0] > 1:
-                    deltas[group] = subset[order_col].rolling(window=2).apply(np.diff).value_counts().index[0]
-                    freq, period = detect_freq_period(deltas[group], tss, len(subset))
-                    freqs[group] = freq
-                    if period:
-                        periods[group] = [period]
+    if grouped:
+        if tss.group_by:
+            for group in group_combinations:
+                if group != "__default":
+                    _, subset = get_group_matches(df, group, tss.group_by)
+                    if subset.shape[0] > 1:
+                        deltas[group] = subset[order_col].rolling(window=2).apply(np.diff).value_counts().index[0]
+                        freq, period = detect_freq_period(deltas[group], tss, len(subset))
+                        freqs[group] = freq
+                        if period:
+                            periods[group] = [period]
+                        else:
+                            periods[group] = [max_pacf(df, group_combinations, target, tss)[group][0]]
                     else:
-                        periods[group] = [max_pacf(df, group_combinations, target, tss)[group][0]]
-                else:
-                    deltas[group] = 1.0
-                    periods[group] = [1]
-                    freqs[group] = 'S'
+                        deltas[group] = 1.0
+                        periods[group] = [1]
+                        freqs[group] = 'S'
+    else:
+        # TODO: restructure this, right now it's just for runtime R&D
+        if tss.group_by:
+            delta = subsample[order_col].rolling(window=2).apply(np.diff).value_counts().index[0]
+            freq, period = detect_freq_period(delta, tss, n)
+            if period:
+                period = [period]
+            else:
+                print("!!!!")  # TODO: how to tackle this?
+            for group in group_combinations:
+                deltas[group] = delta
+                periods[group] = period
+                freqs[group] = freq
 
     return deltas, periods, freqs
 
