@@ -9,7 +9,6 @@ from sktime.forecasting.trend import PolynomialTrendForecaster
 from sktime.transformations.series.detrend import ConditionalDeseasonalizer
 
 from lightwood.api.types import TimeseriesSettings
-from type_infer.dtype import dtype
 from lightwood.helpers.ts import get_ts_groups, get_delta, get_group_matches, Differencer
 from lightwood.helpers.log import log
 from lightwood.encoder.time_series.helpers.common import generate_target_group_normalizers
@@ -40,7 +39,7 @@ def timeseries_analyzer(data: Dict[str, pd.DataFrame], dtype_dict: Dict[str, str
 
     normalizers = generate_target_group_normalizers(data['train'], target, dtype_dict, groups, tss)
 
-    if False: # dtype_dict[target] in (dtype.integer, dtype.float, dtype.num_tsarray):
+    if False:  # dtype_dict[target] in (dtype.integer, dtype.float, dtype.num_tsarray):
         naive_forecast_residuals, scale_factor = get_grouped_naive_residuals(data['dev'], target, tss, groups)
         differencers = get_differencers(data['train'], target, groups, tss.group_by)
         stl_transforms = get_stls(data['train'], data['dev'], target, periods, groups, tss)

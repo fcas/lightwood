@@ -2,12 +2,10 @@ from typing import Dict, Optional
 from functools import partial
 import multiprocessing as mp
 
-import time
-
 import numpy as np
 import pandas as pd
 from lightwood.helpers.parallelism import get_nr_procs
-from lightwood.helpers.ts import get_ts_groups, get_delta, get_group_matches, freq_to_pandas
+from lightwood.helpers.ts import get_ts_groups, get_delta, get_group_matches
 
 from type_infer.dtype import dtype
 from lightwood.api.types import TimeseriesSettings, PredictionArguments

@@ -62,7 +62,7 @@ def get_delta(
     :return:
     Dictionary with group combination tuples as keys. Values are dictionaries with the inferred delta for each series.
     """  # noqa
-    # TODO: for scale, simply pick the largest series as representative. For now, can be single group largest dimension, but eventually we'd like the entire combination
+    # TODO: for scaling, pick largest series as representative. Can be single-group largest dim, but eventually we'd consider entire combination  # noqa
     df = df.copy()
     n = min(10_000, len(df))
     original_col = f'__mdb_original_{tss.order_by}'
