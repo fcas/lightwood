@@ -54,16 +54,13 @@ def transform_timeseries(
             raise Exception(f"Cannot transform. Missing values in historical column {hcol}.")
 
     # infer frequency with get_delta
-    print(' get_ts_groups')
     oby_col = tss.order_by
     groups = get_ts_groups(data, tss)
 
     # initial stable sort and per-partition deduplication
-    print(' initial stable sort and per-partition deduplication')
     data = data.sort_values(by=oby_col, kind='mergesort')
     data = data.drop_duplicates(subset=[oby_col, *gb_arr], keep='first')
 
-    print(' infer frequency with get_delta')  # TODO: super slow
     if not ts_analysis:
         _, periods, freqs = get_delta(data, dtype_dict, groups, target, tss)
     else:
@@ -71,39 +68,22 @@ def transform_timeseries(
         freqs = ts_analysis['sample_freqs']
 
     # pass seconds to timestamps according to each group's inferred freq, and force this freq on index
-    print(' pass seconds to timestamps')
-    # subsets = []
-    # for group in groups:
-    #     if (tss.group_by and group != '__default') or not tss.group_by:
-    #         print(group)
-    #         idxs, subset = get_group_matches(data, group, tss.group_by, copy=True)
-    #         if subset.shape[0] > 0:
-    #             if periods.get(group, periods['__default']) == 0 and subset.shape[0] > 1:
-    #                 raise Exception(
-    #                     f"Partition is not valid, faulty group {group}. Please make sure you group by a set of columns that ensures unique measurements for each grouping through time.")  # noqa
-    #             print('process subset...')
-    #             index = pd.to_datetime(subset[oby_col], unit='s')
-    #             print('indexed')
-    #             subset.index = pd.date_range(start=index.iloc[0],
-    #                                          freq=freqs.get(group, freqs['__default']),
-    #                                          periods=len(subset))
-    #             print('ranged')
-    #             subset['__mdb_inferred_freq'] = subset.index.freq   # sets constant column because pd.concat forgets freq (see: https://github.com/pandas-dev/pandas/issues/3232)  # noqa
-    #             subsets.append(subset)
-    #             print('appended')
-    # original_df = pd.concat(subsets)
+    subsets = []
+    for group in groups:
+        if (tss.group_by and group != '__default') or not tss.group_by:
+            idxs, subset = get_group_matches(data, group, tss.group_by, copy=True)
+            if subset.shape[0] > 0:
+                if periods.get(group, periods['__default']) == 0 and subset.shape[0] > 1:
+                    raise Exception(
+                        f"Partition is not valid, faulty group {group}. Please make sure you group by a set of columns that ensures unique measurements for each grouping through time.")  # noqa
+                index = pd.to_datetime(subset[oby_col], unit='s')
+                subset.index = pd.date_range(start=index.iloc[0],
+                                             freq=freqs.get(group, freqs['__default']),
+                                             periods=len(subset))
+                subset['__mdb_inferred_freq'] = subset.index.freq   # sets constant column because pd.concat forgets freq (see: https://github.com/pandas-dev/pandas/issues/3232)  # noqa
+                subsets.append(subset)
+    original_df = pd.concat(subsets)
 
-    # data.index = pd.to_datetime(data[oby_col], unit='s')
-    # data['__mdb_inferred_freq'] = freqs['__default']
-    # data = data.asfreq(freqs['__default'])
-    # subset.index = pd.date_range(start=index.iloc[0],
-    #                              freq=freqs.get(group, freqs['__default']),
-    #                              periods=len(subset))
-    # data['__mdb_inferred_freq'] = subset.index.freq
-    data['__mdb_inferred_freq'] = freqs['__default']
-    original_df = data
-
-    print('forecast offset')
     if '__mdb_forecast_offset' in original_df.columns:
         """ This special column can be either None or an integer. If this column is passed, then the TS transformation will react to the values within:
 
@@ -124,7 +104,6 @@ def transform_timeseries(
         offset = 0
         cutoff_mode = False
 
-    print('__make_predictions')
     original_index_list = []
     idx = 0
     for row in original_df.itertuples():
@@ -142,7 +121,6 @@ def transform_timeseries(
     if dtype_dict[oby] in (dtype.date, dtype.integer, dtype.float):
         secondary_type_dict[oby] = dtype_dict[oby]
 
-    print('group lens')
     original_df[f'__mdb_original_{oby}'] = original_df[oby]
     group_lengths = []
     if len(gb_arr) > 0:
@@ -154,7 +132,6 @@ def transform_timeseries(
         df_arr = [original_df.sort_values(by=oby)]
         group_lengths.append(len(original_df))
 
-    print('infer next row')
     n_groups = len(df_arr)
     for i, subdf in enumerate(df_arr):
         if '__mdb_forecast_offset' in subdf.columns and mode == 'predict':
@@ -203,10 +180,8 @@ def transform_timeseries(
             if tss.use_previous_target:
                 df_arr[i] = _ts_add_previous_target(df_arr[i], target=target, window=tss.window)
 
-    print('combining')
     combined_df = pd.concat(df_arr)
 
-    print('combined')
     if '__mdb_forecast_offset' in combined_df.columns:
         combined_df = pd.DataFrame(combined_df[combined_df['__make_predictions']])  # filters by True only
         del combined_df['__make_predictions']
@@ -217,7 +192,6 @@ def transform_timeseries(
         else:
             raise Exception(f'Not enough historical context to make a timeseries prediction (`allow_incomplete_history` is set to False). Please provide a number of rows greater or equal to the window size - currently (number_rows, window_size) = ({min(group_lengths)}, {tss.window}). If you can\'t get enough rows, consider lowering your window size. If you want to force timeseries predictions lacking historical context please set the `allow_incomplete_history` timeseries setting to `True`, but this might lead to subpar predictions depending on the mixer.') # noqa
 
-    print('gb map set')
     df_gb_map = None
     if n_groups > 1:
         df_gb_list = list(combined_df.groupby(tss.group_by))
@@ -228,9 +202,8 @@ def transform_timeseries(
     timeseries_row_mapping = {}
     idx = 0
 
-    print('gb map filter')  # TODO: SUPER SLOW
+    # TODO: optimize
     if df_gb_map is None:
-        print('A')
         for i in range(len(combined_df)):
             row = combined_df.iloc[i]
             if not cutoff_mode:
@@ -241,7 +214,6 @@ def transform_timeseries(
                 timeseries_row_mapping[idx] = idx
             idx += 1
     else:
-        print('B')
         for gb in df_gb_map:
             for i in range(len(df_gb_map[gb])):
                 row = df_gb_map[gb].iloc[i]
@@ -342,7 +314,7 @@ def _ts_add_previous_target(df: pd.DataFrame, target: str, window: int) -> pd.Da
 
     :return: Dataframe with new `__mdb_ts_previous_{target}` column that contains historical target context.
     """  # noqa
-    if target not in df:  # TODO change to pd.shift-based
+    if target not in df:
         return df
 
     def _shift_by(x, n):
@@ -372,14 +344,14 @@ def _ts_add_future_target(df, target, horizon, data_dtype, mode):
 
     :return: Dataframe with new `{target}_timestep_{i}'` columns that contains target labels at timestep `i` of a total `TimeseriesSettings.horizon`.
     """  # noqa
-    # TODO: slow, double for.
+    # TODO: optimize
     if target not in df:
         return df
     if data_dtype in (dtype.integer, dtype.float, dtype.num_array, dtype.num_tsarray):
         df[target] = df[target].astype(float)
 
     for timestep_index in range(1, horizon):
-        next_target_value_arr = list(df[target])  # TODO: change to pd.shift-based
+        next_target_value_arr = list(df[target])
         for del_index in range(0, min(timestep_index, len(next_target_value_arr))):
             del next_target_value_arr[0]
             next_target_value_arr.append(None)
